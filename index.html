@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>2D Mini GTA</title>
+    <title>2D Mini GTA - Velký Svět</title>
     <style>
         body {
             margin: 0;
-            background-color: #222;
+            background-color: #111;
             color: white;
             font-family: Arial, sans-serif;
             display: flex;
@@ -19,28 +19,29 @@
             touch-action: none; 
         }
         #hud {
-            font-size: 18px;
-            margin-bottom: 10px;
+            font-size: 16px;
+            margin-bottom: 5px;
             text-align: center;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px;
             border-radius: 8px;
-            width: 90%;
+            width: 95%;
             max-width: 780px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         #gameCanvas {
-            background-color: #444; /* Asfalt */
+            background-color: #2e7d32; /* Výchozí barva přírody (zelená) */
             border: 3px solid #fff;
             max-width: 100%;
-            max-height: 65vh;
+            max-height: 60vh;
         }
-        /* Virtuální joystick */
+        /* Ovládací prvky */
         #joystickContainer {
             position: absolute;
-            bottom: 30px;
-            left: 30px;
-            width: 110px;
-            height: 110px;
+            bottom: 25px;
+            left: 25px;
+            width: 100px;
+            height: 100px;
             background-color: rgba(255, 255, 255, 0.2);
             border: 3px solid rgba(255, 255, 255, 0.5);
             border-radius: 50%;
@@ -49,47 +50,59 @@
             justify-content: center;
         }
         #joystickStick {
-            width: 45px;
-            height: 45px;
+            width: 40px;
+            height: 40px;
             background-color: rgba(255, 255, 255, 0.8);
             border-radius: 50%;
         }
-        /* Tlačítko Obchodu / Garáže */
-        #shopButton {
+        /* Garážový panel */
+        #garage {
             position: absolute;
-            bottom: 30px;
-            right: 30px;
-            padding: 15px 25px;
-            font-size: 18px;
-            background-color: #ff9800;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 10px;
+            border: 2px solid #ff9800;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .car-btn {
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: bold;
             color: white;
             border: none;
-            border-radius: 10px;
-            font-weight: bold;
+            border-radius: 5px;
             cursor: pointer;
-            box-shadow: 0 4px #e65100;
         }
-        #shopButton:active {
-            box-shadow: 0 1px #e65100;
-            transform: translateY(3px);
-        }
+        #btn-sedan { background-color: #f44336; }
+        #btn-pickup { background-color: #2196f3; }
+        #btn-sport { background-color: #ffeb3b; color: black; }
+        .car-btn:disabled { opacity: 0.3; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
     <div id="hud">
-        Peníze: <strong>$<span id="money">100</span></strong> | 
-        Auto: <span id="carType" style="color: #ff3333;">Červené (Pomalé)</span> <br>
-        <span id="missionText" style="color: #ffff00;">Najdi zelenou telefonní budku a vezmi si misi!</span>
+        Peníze: <strong style="color: #4CAF50;">$<span id="money">100</span></strong> | 
+        Aktuální auto: <span id="carType" style="color: #f44336;">Sedan</span> <br>
+        <span id="missionText" style="color: #ffff00;">Prozkoumej mapu! Najdi město nebo polní cesty v přírodě.</span>
     </div>
 
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas" width="800" height="500"></canvas>
 
     <div id="joystickContainer">
         <div id="joystickStick"></div>
     </div>
 
-    <button id="shopButton">KOUPIT SPORŤÁK ($150)</button>
+    <div id="garage">
+        <div style="font-size: 12px; text-align: center; font-weight: bold;">GARÁŽ</div>
+        <button id="btn-sedan" class="car-btn">Sedan (Vlastní)</button>
+        <button id="btn-pickup" class="car-btn">Koupit Pickup ($100)</button>
+        <button id="btn-sport" class="car-btn">Koupit Sporťák ($250)</button>
+    </div>
 
     <script src="game.js"></script>
     <script>
