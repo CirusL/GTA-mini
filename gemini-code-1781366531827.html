@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moje Offline Hra</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin-top: 50px;
+        }
+        #button {
+            padding: 20px 40px;
+            font-size: 24px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        #button:active {
+            background-color: #45a049;
+        }
+        h1 { font-size: 40px; }
+    </style>
+</head>
+<body>
+
+    <h1>Skóre: <span id="score">0</span></h1>
+    <button id="button">KLIKNI NA MĚ!</button>
+
+    <script src="game.js"></script>
+    <script>
+        // Tento kód zaregistruje náš Service Worker pro offline režim
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+            .then(() => console.log("Offline mód je připraven!"))
+            .catch(err => console.log("Chyba při načítání offline módu:", err));
+        }
+    </script>
+</body>
+</html>
