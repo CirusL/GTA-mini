@@ -13,9 +13,9 @@ const btnSport = document.getElementById('btn-sport');
 const WORLD_WIDTH = 3000;
 const WORLD_HEIGHT = 2000;
 
-// NASTAVENÍ HRÁČE (Peníze a odemčená auta se načítají z paměti)
+// NASTAVENÍ HRÁČE (Načítáme peníze, auta i aktuální misi z paměti)
 let player = {
-    x: 300, // Začínáme v městě
+    x: 300,
     y: 300,
     angle: 0,
     speed: 0,
@@ -27,6 +27,7 @@ let player = {
     height: 16,
     color: '#f44336',
     money: parseInt(localStorage.getItem('gta_money')) || 100,
+    currentMissionNumber: parseInt(localStorage.getItem('gta_mission_num')) || 1, // Začínáme misí 1
     unlockedCars: JSON.parse(localStorage.getItem('gta_cars')) || ['sedan'],
     currentCar: 'sedan'
 };
@@ -38,18 +39,50 @@ const carDatabase = {
     sport: { name: "Sporťák", speed: 6.8, color: "#ffeb3b", turn: 0.05 }
 };
 
-// SEZNAM MISÍ NA MAPĚ
-let missions = [
-    { id: 1, name: "Městský kurýr", startX: 500, startY: 300, targetX: 1200, targetY: 450, reward: 40, active: false, done: false, title: "Mise 1: Odvez balíček na konec hlavní třídy!" },
-    { id: 2, name: "Útěk do přírody", startX: 1400, startY: 450, targetX: 2500, targetY: 1500, reward: 80, active: false, done: false, title: "Mise 2: Doruč tajný kufr do chaty hluboko v lese!" }
+// Pevné místo startu misí (Telefonní budka zůstává na jednom místě)
+let phoneBooth = { x: 500, y: 300, radius: 20 };
+
+// Cíl aktuální mise (Bude se generovat náhodně)
+let missionTarget = { x: 0, y: 0, radius: 30, active: false, reward: 0, title: "" };
+let hasMission = false;
+
+// Druhy úkolů, které hra náhodně kombinuje
+const missionTypes = [
+    "Doruč balíček šéfovi gangu",
+    "Uteč před policií na bezpečné místo",
+    "Odvez tajné dokumenty do úkrytu",
+    "Zachraň parťáka a dovez ho na základnu",
+    "Pašuj zlato přes hranice města"
 ];
-let activeMission = null;
+
+// FUNKCE NA VYGENEROVÁNÍ NOVÉ MISE (Může jich být klidně 1000!)
+function generateNextMission() {
+    // 1. Vybereme náhodný typ úkolu z pole výše
+    let randomType = missionTypes[Math.floor(Math.random() * missionTypes.length)];
+    
+    // 2. Vybereme náhodné souřadnice cíle kdekoli na obrovské mapě
+    // Aby to nebylo hned u budky, cíl bude dál než 500 pixelů
+    let targetX = Math.random() * (WORLD_WIDTH - 200) + 100;
+    let targetY = Math.random() * (WORLD_HEIGHT - 200) + 100;
+    
+    // 3. Spočítáme odměnu: základ je $30 + s každou další misí dostaneš o $2 víc!
+    let reward = 30 + (player.currentMissionNumber * 2);
+    
+    // 4. Uložíme data do cíle mise
+    missionTarget.x = targetX;
+    missionTarget.y = targetY;
+    missionTarget.reward = reward;
+    
+    // Rozlišíme v textu, jestli se jede do města nebo do přírody
+    let oblast = targetX > 1500 ? "v lesích v přírodě" : "v ulicích města";
+    missionTarget.title = `Mise ${player.currentMissionNumber}/100: ${randomType} ${oblast}! (Odměna: $${reward})`;
+}
 
 // VYTVOŘENÍ PŘÍRODY (Náhodné stromy na mapě mimo město)
 let trees = [];
-for (let i = 0; i < 60; i++) {
+for (let i = 0; i < 70; i++) {
     trees.push({
-        x: 1600 + Math.random() * 1300,
+        x: 1550 + Math.random() * 1350,
         y: Math.random() * WORLD_HEIGHT,
         size: 20 + Math.random() * 15
     });
@@ -91,12 +124,10 @@ window.addEventListener('keyup', (e) => keys[e.key] = false);
 function updateGarageUI() {
     moneyText.textContent = player.money;
     
-    // Tlačítko Pickup
     if (player.unlockedCars.includes('pickup')) {
         btnPickup.textContent = "Zvolit Pickup";
         if(player.currentCar === 'pickup') btnPickup.textContent = "Pickup (Aktivní)";
     }
-    // Tlačítko Sporťák
     if (player.unlockedCars.includes('sport')) {
         btnSport.textContent = "Zvolit Sporťák";
         if(player.currentCar === 'sport') btnSport.textContent = "Sporťák (Aktivní)";
@@ -112,7 +143,6 @@ function selectCar(type) {
         carTypeText.textContent = carDatabase[type].name;
         carTypeText.style.color = carDatabase[type].color;
     } else {
-        // Nákup auta
         let price = type === 'pickup' ? 100 : 250;
         if (player.money >= price) {
             player.money -= price;
@@ -130,6 +160,9 @@ function selectCar(type) {
 btnSedan.addEventListener('click', () => selectCar('sedan'));
 btnPickup.addEventListener('click', () => selectCar('pickup'));
 btnSport.addEventListener('click', () => selectCar('sport'));
+
+// Nasměrování na správné auto při startu hry
+selectCar(player.currentCar);
 
 // --- LOGIKA HRY (UPDATE) ---
 function update() {
@@ -162,90 +195,97 @@ function update() {
     if (player.x < 20) player.x = 20; if (player.x > WORLD_WIDTH - 20) player.x = WORLD_WIDTH - 20;
     if (player.y < 20) player.y = 20; if (player.y > WORLD_HEIGHT - 20) player.y = WORLD_HEIGHT - 20;
 
-    // KONTROLA MISÍ
+    // KONTROLA VZDÁLENOSTÍ
     let pDist = (x1, y1, x2, y2) => Math.sqrt((x2 - x1)**2 + (y2 - y1)**2);
 
-    missions.forEach(m => {
-        // Přijetí mise u budky
-        if (!activeMission && pDist(player.x, player.y, m.startX, m.startY) < 30) {
-            activeMission = m;
-            missionText.textContent = m.title;
-            missionText.style.color = "#ff9800";
-        }
-        // Dokončení mise v cíli
-        if (activeMission === m && pDist(player.x, player.y, m.targetX, m.targetY) < 35) {
-            player.money += m.reward;
-            missionText.textContent = `Skvělé! Splnil jsi misi: ${m.name} a získal $${m.reward}!`;
+    // 1. Přijetí mise u zelené budky
+    if (!hasMission && pDist(player.x, player.y, phoneBooth.x, phoneBooth.y) < phoneBooth.radius + 10) {
+        hasMission = true;
+        missionTarget.active = true;
+        generateNextMission(); // Vygenerujeme náhodný úkol
+        missionText.textContent = missionTarget.title;
+        missionText.style.color = "#ff9800";
+    }
+
+    // 2. Dokončení aktuální mise v červeném cíli
+    if (hasMission && missionTarget.active && pDist(player.x, player.y, missionTarget.x, missionTarget.y) < missionTarget.radius + 10) {
+        player.money += missionTarget.reward;
+        
+        if (player.currentMissionNumber >= 100) {
+            missionText.textContent = "🏆 KANONÁDA! Dokončil jsi všech 100 misí a ovládl jsi celé město! Jsi král podsvětí!";
+            missionText.style.color = "#00ffff";
+        } else {
+            missionText.textContent = `✔ Výborně! Dokončil jsi misi ${player.currentMissionNumber}. Vydělal jsi $${missionTarget.reward}. Jed' zpátky k zelené budce pro další!`;
             missionText.style.color = "#00ff00";
-            activeMission = null;
-            localStorage.setItem('gta_money', player.money);
-            updateGarageUI();
         }
-    });
+
+        player.currentMissionNumber++; // Posuneme se na další číslo mise
+        hasMission = false;
+        missionTarget.active = false;
+
+        // Uložení postupu do paměti mobilu
+        localStorage.setItem('gta_money', player.money);
+        localStorage.setItem('gta_mission_num', player.currentMissionNumber);
+        updateGarageUI();
+    }
 }
 
-// --- VYKRESLOVÁNÍ (S CHYTROU KAMEROU) ---
+// --- VYKRESLOVÁNÍ ---
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // VÝPOČET POZICE KAMERY (Kamera centruje auto doprostřed plátna)
     let camX = player.x - canvas.width / 2;
     let camY = player.y - canvas.height / 2;
-
-    // Zamezíme kameře vyjet mimo obrovský svět
     if (camX < 0) camX = 0; if (camX > WORLD_WIDTH - canvas.width) camX = WORLD_WIDTH - canvas.width;
     if (camY < 0) camY = 0; if (camY > WORLD_HEIGHT - canvas.height) camY = WORLD_HEIGHT - canvas.height;
 
     ctx.save();
-    ctx.translate(-camX, -camY); // Všechno, co teď nakreslíme, bude posunuté podle kamery!
+    ctx.translate(-camX, -camY);
 
-    // 1. KRESLENÍ ADRES / SILNIC MĚSTA (Město je vlevo: x: 0 až 1500)
-    ctx.fillStyle = "#555"; // Šedý asfalt města
-    ctx.fillRect(100, 100, 1300, 120);  // Hlavní ulice západ-východ
-    ctx.fillRect(400, 100, 120, 800);   // Křižovatka dolů
-    ctx.fillRect(100, 700, 1300, 120);  // Dolní ulice města
+    // KRESLENÍ MĚSTA (Asfaltové silnice)
+    ctx.fillStyle = "#555";
+    ctx.fillRect(100, 100, 1300, 120);  
+    ctx.fillRect(400, 100, 120, 800);   
+    ctx.fillRect(100, 700, 1300, 120);  
 
-    // 2. KRESLENÍ PŘÍRODY / POLNÍCH CEST (Příroda je vpravo: x: 1500 až 3000)
-    ctx.fillStyle = "#8d6e63"; // Hnědá polní cesta vedoucí do lesa
+    // KRESLENÍ PŘÍRODY (Polní cesty a les)
+    ctx.fillStyle = "#8d6e63"; 
     ctx.fillRect(1400, 130, 1200, 60);
     ctx.fillRect(2500, 130, 60, 1500);
 
-    // Kreslení lesa (stromů) v přírodě
     trees.forEach(t => {
         ctx.beginPath();
         ctx.arc(t.x, t.y, t.size, 0, Math.PI * 2);
-        ctx.fillStyle = "#1b5e20"; // Tmavě zelené koruny stromů
+        ctx.fillStyle = "#1b5e20"; 
         ctx.fill();
     });
 
-    // 3. VYKRESLENÍ TELEFONNÍCH BUDEK (MISE)
-    missions.forEach(m => {
-        if (!activeMission) {
-            ctx.beginPath();
-            ctx.arc(m.startX, m.startY, 20, 0, Math.PI * 2);
-            ctx.fillStyle = "#4CAF50";
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = "#fff";
-            ctx.stroke();
-            ctx.fillStyle = "#fff";
-            ctx.font = "bold 11px Arial";
-            ctx.fillText("MISÍ " + m.id, m.startX - 15, m.startY + 4);
-        }
+    // VYKRESLENÍ TELEFONNÍ BUDEK (START MISÍ)
+    if (!hasMission) {
+        ctx.beginPath();
+        ctx.arc(phoneBooth.x, phoneBooth.y, phoneBooth.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#4CAF50"; // Zelená budka
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 10px Arial";
+        ctx.fillText("START", phoneBooth.x - 16, phoneBooth.y + 4);
+    }
 
-        // Vykreslení cíle aktivní mise
-        if (activeMission === m) {
-            ctx.beginPath();
-            ctx.arc(m.targetX, m.targetY, 30, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(244, 67, 54, 0.5)";
-            ctx.fill();
-            ctx.strokeStyle = "#f44336";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-        }
-    });
+    // VYKRESLENÍ CÍLE MISE
+    if (missionTarget.active) {
+        ctx.beginPath();
+        ctx.arc(missionTarget.x, missionTarget.y, missionTarget.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(244, 67, 54, 0.5)"; // Červený kruh cíle
+        ctx.fill();
+        ctx.strokeStyle = "#f44336";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
 
-    // 4. VYKRESLENÍ AUTA HRÁČE
+    // VYKRESLENÍ AUTA
     ctx.save();
     ctx.translate(player.x, player.y);
     ctx.rotate(player.angle);
@@ -253,21 +293,22 @@ function draw() {
     ctx.fillStyle = player.color;
     ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
 
-    // Okna auta
-    ctx.fillStyle = '#2196f3';
+    ctx.fillStyle = '#2196f3'; // Okna
     ctx.fillRect(-2, -player.height / 2 + 2, 8, player.height - 4);
 
-    // Přední světla
-    ctx.fillStyle = '#ffff00';
+    ctx.fillStyle = '#ffff00'; // Světla
     ctx.fillRect(player.width / 2 - 2, -player.height / 2 + 1, 3, 3);
     ctx.fillRect(player.width / 2 - 2, player.height / 2 - 4, 3, 3);
 
     ctx.restore();
-    ctx.restore(); // Konec kamery
+    ctx.restore(); 
 }
 
 // Spuštění
 updateGarageUI();
+if (player.currentMissionNumber > 1) {
+    missionText.textContent = `Vítej zpět! Jsi na misi číslo ${player.currentMissionNumber}/100. Dojeď k zelené budce.`;
+}
 (function gameLoop() {
     update();
     draw();
